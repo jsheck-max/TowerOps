@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TowerOps</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1e3a5f">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',system-ui,sans-serif;}
+body{background:#f9fafb;color:#111827;}
+:root{--brand-900:#1e3a5f;--blue-500:#3b82f6;--blue-600:#2563eb;--blue-700:#1d4ed8;--green-500:#10b981;--green-600:#059669;--yellow-500:#f59e0b;--yellow-600:#d97706;--red-500:#ef4444;--red-600:#dc2626;}
+
+/* Layout */
+.app{display:flex;min-height:100vh;}
+.sidebar{width:256px;background:var(--brand-900);color:white;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:40;}
+.main{flex:1;margin-left:256px;display:flex;flex-direction:column;min-height:100vh;}
+.header{background:white;border-bottom:1px solid #e5e7eb;padding:20px 32px;display:flex;align-items:center;justify-content:space-between;}
+.content{flex:1;padding:32px;overflow:auto;}
+
+/* Sidebar */
+.logo{padding:24px;border-bottom:1px solid rgba(255,255,255,0.1);}
+.logo h1{font-size:20px;font-weight:700;letter-spacing:-0.5px;}
+.logo span{color:#60a5fa;}
+.logo p{font-size:11px;color:#9ca3af;margin-top:4px;}
+.nav{flex:1;padding:16px;}
+.nav-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;font-size:14px;font-weight:500;color:#d1d5db;cursor:pointer;margin-bottom:2px;transition:all 0.15s;text-decoration:none;}
+.nav-item:hover,.nav-item.active{background:rgba(255,255,255,0.12);color:white;}
+.nav-icon{width:20px;height:20px;opacity:0.8;}
+.sidebar-footer{padding:16px;border-top:1px solid rgba(255,255,255,0.1);}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--blue-500);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;}
+
+/* Cards */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px;}
+.stat-card{background:white;border-radius:12px;border:1px solid #e5e7eb;padding:20px;transition:all 0.2s;}
+.stat-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.06);transform:translateY(-1px);}
+.stat-label{font-size:13px;color:#6b7280;font-weight:500;}
+.stat-value{font-size:28px;font-weight:700;margin-top:4px;}
+.stat-sub{font-size:11px;color:#9ca3af;margin-top:4px;}
+
+/* Table */
+.table-wrap{background:white;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+thead tr{background:#f9fafb;border-bottom:1px solid #f3f4f6;}
+th{text-align:left;padding:12px 24px;font-size:11px;font-weight:500;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;}
+td{padding:16px 24px;border-bottom:1px solid #f9fafb;font-size:14px;}
+tbody tr{cursor:pointer;transition:background 0.15s;}
+tbody tr:hover{background:#f9fafb;}
+.site-name{font-weight:600;color:#111827;}
+.site-num{font-size:12px;color:#9ca3af;margin-top:2px;}
+.carrier{color:#4b5563;}
+
+/* Badges */
+.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:500;}
+.badge-green{background:#d1fae5;color:#065f46;}
+.badge-yellow{background:#fef3c7;color:#92400e;}
+.badge-orange{background:#ffedd5;color:#9a3412;}
+.badge-blue{background:#dbeafe;color:#1e40af;}
+.badge-gray{background:#f3f4f6;color:#4b5563;}
+.badge-red{background:#fee2e2;color:#991b1b;}
+
+/* Budget bar */
+.budget-wrap{width:100%;}
+.budget-labels{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;}
+.budget-track{width:100%;height:8px;background:#e5e7eb;border-radius:99px;overflow:hidden;}
+.budget-fill{height:100%;border-radius:99px;transition:width 0.8s ease;}
+.fill-green{background:var(--green-500);}
+.fill-yellow{background:var(--yellow-500);}
+.fill-red{background:var(--red-500);}
+
+/* Section headers */
+.section-title{font-size:16px;font-weight:600;color:#111827;margin-bottom:16px;}
+.page{display:none;flex-direction:column;flex:1;}
+.page.active{display:flex;}
+
+/* Detail page */
+.detail-grid{display:grid;grid-template-columns:1fr 2fr;gap:24px;margin-bottom:24px;}
+.info-card{background:white;border-radius:12px;border:1px solid #e5e7eb;padding:24px;}
+.info-card h3{font-size:15px;font-weight:600;margin-bottom:16px;}
+.info-row{display:flex;justify-content:space-between;padding:8px 0;font-size:14px;}
+.info-label{color:#6b7280;}
+.info-value{color:#111827;font-weight:500;}
+.budget-line{display:flex;align-items:center;gap:16px;margin-bottom:12px;}
+.budget-cat{width:130px;flex-shrink:0;font-size:13px;color:#4b5563;}
+.budget-line .budget-wrap{flex:1;}
+.back-link{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#6b7280;cursor:pointer;margin-bottom:20px;}
+.back-link:hover{color:#374151;}
+.placeholder-card{background:white;border-radius:12px;border:1px solid #e5e7eb;padding:24px;}
+.placeholder-card h3{font-size:15px;font-weight:600;margin-bottom:8px;}
+.placeholder-card p{font-size:13px;color:#9ca3af;}
+.bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+
+/* Buttons */
+.btn-primary{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;font-size:13px;font-weight:500;border-radius:8px;background:var(--blue-600);color:white;border:none;cursor:pointer;transition:background 0.15s;}
+.btn-primary:hover{background:var(--blue-700);}
+.filter-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;}
+.filters{display:flex;gap:8px;}
+.filter-btn{padding:6px 14px;font-size:12px;font-weight:500;border-radius:8px;border:1px solid #e5e7eb;background:white;color:#6b7280;cursor:pointer;transition:all 0.15s;}
+.filter-btn:hover{border-color:#d1d5db;color:#374151;}
+.filter-btn.active{background:#eff6ff;color:var(--blue-600);border-color:#bfdbfe;}
+
+/* Login */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f9fafb;}
+.login-box{width:100%;max-width:420px;}
+.login-logo{text-align:center;margin-bottom:32px;}
+.login-logo h1{font-size:32px;font-weight:700;}
+.login-logo p{color:#6b7280;margin-top:8px;font-size:14px;}
+.login-form{background:white;border-radius:12px;border:1px solid #e5e7eb;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
+.login-form h2{font-size:18px;font-weight:600;margin-bottom:24px;}
+.form-group{margin-bottom:16px;}
+.form-group label{display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:6px;}
+.form-group input{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;outline:none;transition:border 0.15s;}
+.form-group input:focus{border-color:var(--blue-500);box-shadow:0 0 0 3px rgba(59,130,246,0.1);}
+.login-btn{width:100%;padding:10px;margin-top:8px;background:var(--blue-600);color:white;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;transition:background 0.15s;}
+.login-btn:hover{background:var(--blue-700);}
+
+/* Animations */
+.fade-in{animation:fadeIn 0.35s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+/* Notification dot */
+.notif{position:relative;}
+.notif::after{content:'';position:absolute;top:0;right:0;width:8px;height:8px;background:var(--red-500);border-radius:50%;border:2px solid white;}
+
+@media(max-width:1100px){.stat-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:768px){.sidebar{display:none;}.main{margin-left:0;}.stat-grid{grid-template-columns:1fr;}.detail-grid{grid-template-columns:1fr;}.bottom-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<div class="app" id="app-main" style="display:none;">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <h1><span>Tower</span>Ops</h1>
+      <p>Job Cost Intelligence</p>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="sidebar-footer">
+      <div style="display:flex;align-items:center;gap:12px;padding:4px;">
+        <div class="avatar">JS</div>
+        <div>
+          <div style="font-size:13px;font-weight:500;">Judah Sheck</div>
+          <div style="font-size:11px;color:#9ca3af;">Construction Manager</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- DASHBOARD -->
+    <div class="page" id="page-dashboard">
+      <div class="header">
+        <div>
+          <h2 style="font-size:20px;font-weight:600;">Dashboard</h2>
+          <p style="font-size:13px;color:#6b7280;margin-top:2px;">Real-time portfolio overview</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:12px;color:#9ca3af;">March 1, 2026</span>
+          <div class="notif" style="width:36px;height:36px;border-radius:50%;background:#eff6ff;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            <svg width="18" height="18" fill="none" stroke="#3b82f6" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="content fade-in" id="dashboard-content"></div>
+    </div>
+
+    <!-- PROJECTS -->
+    <div class="page" id="page-projects">
+      <div class="header">
+        <div>
+          <h2 style="font-size:20px;font-weight:600;">Projects</h2>
+          <p style="font-size:13px;color:#6b7280;margin-top:2px;" id="project-count"></p>
+        </div>
+      </div>
+      <div class="content fade-in" id="projects-content"></div>
+    </div>
+
+    <!-- DETAIL -->
+    <div class="page" id="page-detail">
+      <div class="header" id="detail-header"></div>
+      <div class="content fade-in" id="detail-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN PAGE -->
+<div id="login-page" class="login-wrap">
+  <div class="login-box">
+    <div class="login-logo">
+      <h1><span style="color:var(--blue-600);">Tower</span>Ops</h1>
+      <p>Job Cost Intelligence for Telecom</p>
+    </div>
+    <div class="login-form">
+      <h2>Sign In</h2>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@company.com" value="judah@tnts.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-pass" placeholder="••••••••" value="demo1234">
+      </div>
+      <button class="login-btn" onclick="doLogin()">Sign In</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============== MOCK DATA ==============
+const PROJECTS = [
+  {id:1, site_name:"Hilltop Tower", site_number:"FA47821", carrier:"AT&T", market:"Michigan", state:"MI", scope:"Modification", tower:"Monopole", status:"active", ntp:"2025-12-15", target:"2026-03-30", budget:52000, actual:38400, days:47},
+  {id:2, site_name:"Cedar Ridge", site_number:"VZ-MI-3392", carrier:"Verizon", market:"Michigan", state:"MI", scope:"New Build", tower:"Self-Support", status:"active", ntp:"2026-01-08", target:"2026-04-15", budget:128000, actual:94500, days:52},
+  {id:3, site_name:"Riverside Complex", site_number:"FA51003", carrier:"AT&T", market:"Tennessee", state:"TN", scope:"Modification", tower:"Monopole", status:"pre_construction", ntp:"2026-02-20", target:"2026-05-01", budget:41000, actual:3200, days:null},
+  {id:4, site_name:"Oak Mountain", site_number:"L3H-0892", carrier:"L3Harris", market:"Tennessee", state:"TN", scope:"New Build", tower:"Guyed", status:"active", ntp:"2025-11-20", target:"2026-03-10", budget:185000, actual:201000, days:72},
+  {id:5, site_name:"Meadowbrook South", site_number:"VZ-TN-4410", carrier:"Verizon", market:"Tennessee", state:"TN", scope:"Decommission", tower:"Monopole", status:"punch_list", ntp:"2025-10-05", target:"2026-01-15", budget:28000, actual:26800, days:108},
+  {id:6, site_name:"Industrial Park", site_number:"FA49177", carrier:"AT&T", market:"Michigan", state:"MI", scope:"Modification", tower:"Rooftop", status:"active", ntp:"2026-01-22", target:"2026-04-01", budget:67000, actual:71200, days:38},
+  {id:7, site_name:"Lakeview Heights", site_number:"VZ-MI-3401", carrier:"Verizon", market:"Michigan", state:"MI", scope:"New Build", tower:"Monopole", status:"active", ntp:"2026-02-01", target:"2026-05-20", budget:95000, actual:42100, days:28},
+  {id:8, site_name:"Summit Point", site_number:"FA50228", carrier:"AT&T", market:"Tennessee", state:"TN", scope:"Modification", tower:"Self-Support", status:"closeout", ntp:"2025-09-10", target:"2025-12-20", budget:73000, actual:69800, days:null},
+  {id:9, site_name:"Pinewood Station", site_number:"L3H-0915", carrier:"L3Harris", market:"Michigan", state:"MI", scope:"New Build", tower:"Guyed", status:"active", ntp:"2026-01-15", target:"2026-06-01", budget:210000, actual:88000, days:45},
+  {id:10, site_name:"Valley Crossing", site_number:"FA48500", carrier:"AT&T", market:"Tennessee", state:"TN", scope:"Maintenance", tower:"Monopole", status:"complete", ntp:"2025-08-01", target:"2025-09-15", budget:15000, actual:14200, days:null},
+  {id:11, site_name:"Northgate Tower", site_number:"VZ-TN-4425", carrier:"Verizon", market:"Tennessee", state:"TN", scope:"Modification", tower:"Self-Support", status:"active", ntp:"2026-02-10", target:"2026-04-20", budget:58000, actual:19500, days:19},
+  {id:12, site_name:"Eastfield Mall", site_number:"FA51200", carrier:"AT&T", market:"Michigan", state:"MI", scope:"New Build", tower:"Rooftop", status:"pre_construction", ntp:"2026-02-28", target:"2026-06-15", budget:89000, actual:0, days:null},
+];
+
+const BUDGET_LINES = [
+  {category:"Tower Labor", budgeted:22000, actual:18500},
+  {category:"Civil / Ground", budgeted:8000, actual:7200},
+  {category:"Electrical", budgeted:6000, actual:4800},
+  {category:"Materials", budgeted:8500, actual:3900},
+  {category:"Travel / Per Diem", budgeted:3500, actual:2100},
+  {category:"Equipment / Crane", budgeted:4000, actual:1900},
+];
+
+const STATUS_MAP = {
+  pre_construction:{label:"Pre-Construction",cls:"badge-yellow"},
+  active:{label:"Active",cls:"badge-green"},
+  punch_list:{label:"Punch List",cls:"badge-orange"},
+  closeout:{label:"Closeout",cls:"badge-blue"},
+  complete:{label:"Complete",cls:"badge-gray"},
+  on_hold:{label:"On Hold",cls:"badge-red"},
+};
+
+// ============== NAV ==============
+const NAV_ITEMS = [
+  {id:"dashboard",label:"Dashboard",icon:'<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'},
+  {id:"projects",label:"Projects",icon:'<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>'},
+];
+
+function buildNav(){
+  const nav=document.getElementById('nav');
+  nav.innerHTML=NAV_ITEMS.map(n=>`<a class="nav-item ${n.id==='dashboard'?'active':''}" data-page="${n.id}" onclick="navigate('${n.id}')">${n.icon}<span>${n.label}</span></a>`).join('');
+}
+
+function navigate(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
+}
+
+function showDetail(id){
+  const p = PROJECTS.find(x=>x.id===id);
+  if(!p) return;
+  renderDetail(p);
+  document.querySelectorAll('.page').forEach(pg=>pg.classList.remove('active'));
+  document.getElementById('page-detail').classList.add('active');
+}
+
+// ============== RENDERERS ==============
+function budgetBar(budget,actual,showLabel=true){
+  const pct = budget>0 ? Math.min((actual/budget)*100,150) : 0;
+  const isOver = actual>budget && budget>0;
+  const isWarn = pct>=80 && pct<100;
+  const cls = isOver?'fill-red':isWarn?'fill-yellow':'fill-green';
+  const pctColor = isOver?'color:#dc2626':'color:#4b5563';
+  let html = '<div class="budget-wrap">';
+  if(showLabel) html += `<div class="budget-labels"><span style="color:#6b7280">$${actual.toLocaleString()} / $${budget.toLocaleString()}</span><span style="${pctColor};font-weight:500">${pct.toFixed(0)}%</span></div>`;
+  html += `<div class="budget-track"><div class="budget-fill ${cls}" style="width:${Math.min(pct,100)}%"></div></div></div>`;
+  return html;
+}
+
+function badge(status){
+  const s=STATUS_MAP[status]||{label:status,cls:'badge-gray'};
+  return `<span class="badge ${s.cls}">${s.label}</span>`;
+}
+
+function renderDashboard(){
+  const active = PROJECTS.filter(p=>['pre_construction','active','punch_list'].includes(p.status));
+  const totalBudget = PROJECTS.reduce((s,p)=>s+p.budget,0);
+  const totalActual = PROJECTS.reduce((s,p)=>s+p.actual,0);
+  const overBudget = PROJECTS.filter(p=>p.actual>p.budget && p.budget>0);
+
+  const el=document.getElementById('dashboard-content');
+  el.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Active Projects</div><div class="stat-value" style="color:var(--blue-700)">${active.length}</div><div class="stat-sub">across 3 carriers</div></div>
+      <div class="stat-card"><div class="stat-label">Total Budget</div><div class="stat-value" style="color:var(--green-600)">$${(totalBudget/1000).toFixed(0)}K</div><div class="stat-sub">${PROJECTS.length} total projects</div></div>
+      <div class="stat-card"><div class="stat-label">Total Spent</div><div class="stat-value" style="color:var(--yellow-600)">$${(totalActual/1000).toFixed(0)}K</div><div class="stat-sub">${(totalActual/totalBudget*100).toFixed(0)}% of total budget</div></div>
+      <div class="stat-card"><div class="stat-label">Over Budget</div><div class="stat-value" style="color:var(--red-600)">${overBudget.length}</div><div class="stat-sub">⚠ needs attention</div></div>
+    </div>
+    <div class="section-title">Active Projects</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Site</th><th>Carrier</th><th>Status</th><th>Budget</th><th>Days</th></tr></thead>
+        <tbody>${active.map(p=>`
+          <tr onclick="showDetail(${p.id})">
+            <td><div class="site-name">${p.site_name}</div><div class="site-num">${p.site_number}</div></td>
+            <td class="carrier">${p.carrier}</td>
+            <td>${badge(p.status)}</td>
+            <td style="width:240px">${budgetBar(p.budget,p.actual)}</td>
+            <td style="color:#6b7280;font-size:13px">${p.days!=null?p.days+'d':'—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderProjects(){
+  document.getElementById('project-count').textContent=PROJECTS.length+' total';
+  const el=document.getElementById('projects-content');
+  el.innerHTML=`
+    <div class="filter-bar">
+      <div class="filters">
+        <button class="filter-btn active" onclick="filterProjects(this,'all')">All</button>
+        <button class="filter-btn" onclick="filterProjects(this,'AT&T')">AT&T</button>
+        <button class="filter-btn" onclick="filterProjects(this,'Verizon')">Verizon</button>
+        <button class="filter-btn" onclick="filterProjects(this,'L3Harris')">L3Harris</button>
+      </div>
+      <button class="btn-primary"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> New Project</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Site</th><th>Carrier</th><th>Market</th><th>Status</th><th>Budget vs Actual</th></tr></thead>
+        <tbody id="projects-tbody"></tbody>
+      </table>
+    </div>`;
+  renderProjectRows(PROJECTS);
+}
+
+function renderProjectRows(list){
+  document.getElementById('projects-tbody').innerHTML=list.map(p=>`
+    <tr onclick="showDetail(${p.id})">
+      <td><div class="site-name">${p.site_name}</div><div class="site-num">${p.site_number}</div></td>
+      <td class="carrier">${p.carrier}</td>
+      <td style="color:#4b5563">${p.market}</td>
+      <td>${badge(p.status)}</td>
+      <td style="width:220px">${budgetBar(p.budget,p.actual)}</td>
+    </tr>`).join('');
+}
+
+function filterProjects(btn,carrier){
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderProjectRows(carrier==='all'?PROJECTS:PROJECTS.filter(p=>p.carrier===carrier));
+}
+
+function renderDetail(p){
+  document.getElementById('detail-header').innerHTML=`<div><h2 style="font-size:20px;font-weight:600;">${p.site_name} — ${p.site_number}</h2><p style="font-size:13px;color:#6b7280;margin-top:2px;">${p.carrier} · ${p.market} · ${p.tower} ${p.scope}</p></div>`;
+  
+  const el=document.getElementById('detail-content');
+  el.innerHTML=`
+    <a class="back-link" onclick="navigate('projects')"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back to Projects</a>
+    <div class="detail-grid">
+      <div class="info-card">
+        <h3>Project Info</h3>
+        <div class="info-row"><span class="info-label">Status</span><span>${badge(p.status)}</span></div>
+        <div class="info-row"><span class="info-label">Site Number</span><span class="info-value">${p.site_number}</span></div>
+        <div class="info-row"><span class="info-label">Tower Type</span><span class="info-value">${p.tower}</span></div>
+        <div class="info-row"><span class="info-label">Scope</span><span class="info-value">${p.scope}</span></div>
+        <div class="info-row"><span class="info-label">NTP Date</span><span class="info-value">${p.ntp}</span></div>
+        <div class="info-row"><span class="info-label">Target Completion</span><span class="info-value">${p.target}</span></div>
+        ${p.days!=null?`<div class="info-row"><span class="info-label">Days Active</span><span class="info-value">${p.days} days</span></div>`:''}
+      </div>
+      <div class="info-card" style="grid-column:span 1;">
+        <h3>Budget Overview</h3>
+        <div style="margin-bottom:24px">${budgetBar(p.budget,p.actual)}</div>
+        ${BUDGET_LINES.map(l=>{
+          const scale=p.budget/52000;
+          const b=Math.round(l.budgeted*scale);
+          const a=Math.round(l.actual*scale*(p.actual/38400));
+          return`<div class="budget-line"><span class="budget-cat">${l.category}</span>${budgetBar(b,a)}</div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div class="bottom-grid">
+      <div class="placeholder-card"><h3>Time Entries</h3><p>Time tracking data will appear here once Workyard integration is connected. Auto-syncs every 30 minutes.</p>
+        <div style="margin-top:16px;padding:16px;background:#f9fafb;border-radius:8px;font-size:13px;color:#6b7280;">
+          <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>Brandon's Crew — 8.5 hrs</span><span style="color:#059669">$425.00</span></div>
+          <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>Brandon's Crew — 9.0 hrs</span><span style="color:#059669">$450.00</span></div>
+          <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>Brandon's Crew — 7.5 hrs (OT: 1.5)</span><span style="color:#d97706">$412.50</span></div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:8px;">Sample data — connect Workyard for live sync</div>
+        </div>
+      </div>
+      <div class="placeholder-card"><h3>Documents</h3><p>Upload NTPs, construction drawings, and closeout packages here.</p>
+        <div style="margin-top:16px;font-size:13px;">
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f9fafb;border-radius:8px;margin-bottom:6px;">
+            <svg width="16" height="16" fill="none" stroke="#3b82f6" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+            <span style="color:#374151">NTP_${p.site_number}.pdf</span><span class="badge badge-green" style="margin-left:auto;font-size:10px">Received</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f9fafb;border-radius:8px;margin-bottom:6px;">
+            <svg width="16" height="16" fill="none" stroke="#3b82f6" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+            <span style="color:#374151">CD_${p.site_number}.pdf</span><span class="badge badge-blue" style="margin-left:auto;font-size:10px">Reviewed</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f9fafb;border-radius:8px;">
+            <svg width="16" height="16" fill="none" stroke="#3b82f6" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+            <span style="color:#374151">SA_${p.site_number}.pdf</span><span class="badge badge-yellow" style="margin-left:auto;font-size:10px">Pending</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ============== LOGIN ==============
+function doLogin(){
+  document.getElementById('login-page').style.display='none';
+  document.getElementById('app-main').style.display='flex';
+  buildNav();
+  renderDashboard();
+  renderProjects();
+  navigate('dashboard');
+}
+
+// Auto-focus
+document.getElementById('login-email').focus();
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.getElementById('login-page').style.display!=='none')doLogin();});
+</script>
+</body>
+</html>
