@@ -1,0 +1,16 @@
+{
+  "name": "TowerOps",
+  "short_name": "TowerOps",
+  "description": "Real-time job cost management for telecom construction",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#1e3a5f",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
