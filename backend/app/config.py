@@ -4,10 +4,10 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # Database
-    database_url: str = "postgresql://towerops:towerops@localhost:5432/towerops"
+    database_url: str = "postgresql://towerops:towerops@db:5432/towerops"
 
     # Redis
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = "redis://redis:6379/0"
 
     # Auth
     secret_key: str = "change-me-to-a-random-secret-key"
