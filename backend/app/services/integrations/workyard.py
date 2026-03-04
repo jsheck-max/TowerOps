@@ -54,7 +54,7 @@ class WorkyardClient:
         """Fetch all projects from Workyard."""
         org_id = await self.get_org_id()
         try:
-            data = await self._get(f"/orgs/{org_id}/projects", {"limit": 500})
+            data = await self._get(f"/orgs/{org_id}/projects", None)
             if isinstance(data, list):
                 return data
             return data.get("data", data.get("projects", []))
@@ -62,7 +62,7 @@ class WorkyardClient:
             if e.response.status_code == 404:
                 # Try alternative endpoint
                 try:
-                    data = await self._get(f"/orgs/{org_id}/jobs", {"limit": 500})
+                    data = await self._get(f"/orgs/{org_id}/jobs", None)
                     if isinstance(data, list):
                         return data
                     return data.get("data", [])
@@ -73,7 +73,7 @@ class WorkyardClient:
     async def get_employees(self) -> list[dict]:
         """Fetch active employees from Workyard."""
         org_id = await self.get_org_id()
-        data = await self._get(f"/orgs/{org_id}/employees.v2", {"status": "eq:active", "limit": 200})
+        data = await self._get(f"/orgs/{org_id}/employees.v2", {"status": "eq:active"})
         if isinstance(data, list):
             return data
         return data.get("data", [])
