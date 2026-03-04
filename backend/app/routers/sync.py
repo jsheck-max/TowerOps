@@ -56,18 +56,31 @@ async def fetch_workyard_projects(
 
         # Fetch time cards from the last 5 days to check activity
         five_days_ago = (datetime.utcnow() - timedelta(days=5)).strftime("%Y-%m-%d")
+        today = datetime.utcnow().strftime("%Y-%m-%d")
         try:
-            recent_cards = await client.get_time_cards(start_date=five_days_ago, end_date=datetime.utcnow().strftime("%Y-%m-%d"))
+            recent_cards = await client.get_time_cards(start_date=five_days_ago, end_date=today)
+            logger.warning(f"Time cards fetched: {len(recent_cards)} entries in last 5 days")
         except Exception as e:
-            logger.warning(f"Could not fetch time cards for activity check: {e}")
+            logger.warning(f"Could not fetch time cards for activity check: {type(e).__name__}: {e}")
             recent_cards = []
 
         # Build set of project IDs with recent activity
         active_project_ids = set()
         for tc in recent_cards:
-            pid = tc.get("project_id") or tc.get("project", {}).get("id") if isinstance(tc.get("project"), dict) else tc.get("project_id")
+            # project_id could be top-level or nested in a project object
+            pid = tc.get("project_id")
+            if not pid and isinstance(tc.get("project"), dict):
+                pid = tc["project"].get("id")
+            # Also check cost_allocation or job fields
+            if not pid:
+                pid = tc.get("job_id")
+            if not pid and isinstance(tc.get("cost_allocation"), list):
+                for alloc in tc["cost_allocation"]:
+                    if isinstance(alloc, dict) and alloc.get("project_id"):
+                        active_project_ids.add(str(alloc["project_id"]))
             if pid:
                 active_project_ids.add(str(pid))
+        logger.warning(f"Active project IDs from time cards: {len(active_project_ids)}")
 
         normalized = [normalize_workyard_project(p) for p in raw_projects]
 
