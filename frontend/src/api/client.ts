@@ -136,6 +136,23 @@ class ApiClient {
   createLaborRate(data: { role: string; hourly_rate: number; overtime_multiplier?: number; per_diem?: number }) {
     return this.request('/settings/labor-rates', { method: 'POST', body: JSON.stringify(data) });
   }
+
+  // Sync - Workyard
+  getWorkyardProjects() {
+    return this.request('/sync/workyard/projects');
+  }
+
+  getWorkyardEmployees() {
+    return this.request('/sync/workyard/employees');
+  }
+
+  importWorkyardProject(data: Record<string, unknown>) {
+    return this.request('/sync/workyard/import', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  importWorkyardProjectsBulk(projectIds: string[]) {
+    return this.request('/sync/workyard/import-bulk', { method: 'POST', body: JSON.stringify(projectIds) });
+  }
 }
 
 export const api = new ApiClient();
