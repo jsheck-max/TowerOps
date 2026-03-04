@@ -1,13 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
-from app.routers import auth, projects, dashboard, settings
+from app.routers import auth, projects, dashboard
+from app.routers import settings as settings_router
 
-settings = get_settings()
+config = get_settings()
 
 app = FastAPI(
-    title=settings.app_name,
-    version=settings.app_version,
+    title=config.app_name,
+    version=config.app_version,
     description="Real-time job cost management for telecom construction PMs",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -29,9 +30,9 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(projects.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
-app.include_router(settings.router, prefix="/api/v1")
+app.include_router(settings_router.router, prefix="/api/v1")
 
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "app": settings.app_name, "version": settings.app_version}
+    return {"status": "ok", "app": config.app_name, "version": config.app_version}
