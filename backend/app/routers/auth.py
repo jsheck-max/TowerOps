@@ -56,7 +56,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         logger.warning("LOGIN FAIL: password mismatch")
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    token = create_access_token({"sub": str(user.id)})
+    token = create_access_token({"sub": str(user.id), "org_id": str(user.org_id)})
     logger.warning("LOGIN SUCCESS")
     return TokenResponse(access_token=token)
 
