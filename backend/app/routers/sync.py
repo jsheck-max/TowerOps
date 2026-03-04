@@ -7,6 +7,7 @@ from app.models.project import Project
 from app.utils.security import get_current_user
 from app.services.integrations.workyard import WorkyardClient, normalize_workyard_project, normalize_workyard_employee
 import logging
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -42,10 +43,32 @@ async def fetch_workyard_projects(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Fetch all projects/jobs from Workyard for import preview."""
+    """Fetch all projects/jobs from Workyard for import preview.
+    
+    Also fetches recent time cards to determine which projects are actively
+    being worked on. Projects with no clock-ins in the last 5 days are
+    marked as inactive (not in construction).
+    """
     client = _get_workyard_client(db, current_user.org_id)
     try:
+        # Fetch projects and recent time cards in parallel
         raw_projects = await client.get_projects()
+
+        # Fetch time cards from the last 5 days to check activity
+        five_days_ago = (datetime.utcnow() - timedelta(days=5)).strftime("%Y-%m-%d")
+        try:
+            recent_cards = await client.get_time_cards(start_date=five_days_ago, end_date=datetime.utcnow().strftime("%Y-%m-%d"))
+        except Exception as e:
+            logger.warning(f"Could not fetch time cards for activity check: {e}")
+            recent_cards = []
+
+        # Build set of project IDs with recent activity
+        active_project_ids = set()
+        for tc in recent_cards:
+            pid = tc.get("project_id") or tc.get("project", {}).get("id") if isinstance(tc.get("project"), dict) else tc.get("project_id")
+            if pid:
+                active_project_ids.add(str(pid))
+
         normalized = [normalize_workyard_project(p) for p in raw_projects]
 
         # Mark which ones are already imported
@@ -58,8 +81,22 @@ async def fetch_workyard_projects(
 
         for proj in normalized:
             proj["already_imported"] = proj["workyard_id"] in existing_ids
+            proj["recently_active"] = proj["workyard_id"] in active_project_ids
+            if not proj["recently_active"]:
+                proj["activity_status"] = "inactive"
+            else:
+                proj["activity_status"] = "in_construction"
 
-        return {"projects": normalized, "total": len(normalized)}
+        # Sort: active first, then inactive
+        normalized.sort(key=lambda p: (not p["recently_active"], p["site_name"]))
+
+        active_count = sum(1 for p in normalized if p["recently_active"])
+        return {
+            "projects": normalized,
+            "total": len(normalized),
+            "active_count": active_count,
+            "inactive_count": len(normalized) - active_count,
+        }
     except Exception as e:
         logger.error(f"Failed to fetch Workyard projects: {e}")
         raise HTTPException(status_code=502, detail=f"Workyard API error: {str(e)}")
