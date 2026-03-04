@@ -36,6 +36,10 @@ class ApiClient {
       throw new Error('Unauthorized');
     }
 
+    if (res.status === 204) {
+      return undefined as T;
+    }
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: 'Request failed' }));
       throw new Error(err.detail || `HTTP ${res.status}`);
@@ -105,6 +109,32 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  // Settings - Integrations
+  getIntegrations() {
+    return this.request('/settings/integrations');
+  }
+
+  createIntegration(data: { platform: string; api_key: string; api_url?: string; sync_frequency_minutes?: number }) {
+    return this.request('/settings/integrations', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  deleteIntegration(id: string) {
+    return this.request(`/settings/integrations/${id}`, { method: 'DELETE' });
+  }
+
+  testIntegration(id: string) {
+    return this.request(`/settings/integrations/${id}/test`, { method: 'POST' });
+  }
+
+  // Settings - Labor Rates
+  getLaborRates() {
+    return this.request('/settings/labor-rates');
+  }
+
+  createLaborRate(data: { role: string; hourly_rate: number; overtime_multiplier?: number; per_diem?: number }) {
+    return this.request('/settings/labor-rates', { method: 'POST', body: JSON.stringify(data) });
   }
 }
 
