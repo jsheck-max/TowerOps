@@ -145,10 +145,11 @@ async def import_workyard_projects_bulk(
         project = Project(
             org_id=current_user.org_id,
             site_name=proj["site_name"],
-            site_number=proj["site_number"],
-            address=proj["address"],
-            state=proj["state"],
-            market=proj["market"],
+            site_number=proj["site_number"] or None,
+            carrier=proj.get("customer_name") or "AT&T",
+            address=proj["address"] or None,
+            state=proj["state"] or None,
+            market=proj["market"] or None,
             notes=f"workyard_id:{wid}",
         )
         db.add(project)
