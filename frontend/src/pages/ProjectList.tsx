@@ -16,6 +16,8 @@ interface WorkyardProject {
   status: string;
   customer_name: string;
   already_imported: boolean;
+  recently_active: boolean;
+  activity_status: string;
   raw: Record<string, unknown>;
 }
 
@@ -38,6 +40,7 @@ export function ProjectList() {
   const [wyError, setWyError] = useState('');
   const [wySearch, setWySearch] = useState('');
   const [selectedWy, setSelectedWy] = useState<Set<string>>(new Set());
+  const [wyFilter, setWyFilter] = useState<'all' | 'active' | 'inactive'>('active');
   const [importing, setImporting] = useState(false);
 
   useEffect(() => {
@@ -69,7 +72,7 @@ export function ProjectList() {
     setWyLoading(true);
     setWyError('');
     try {
-      const result = await api.getWorkyardProjects() as { projects: WorkyardProject[]; total: number };
+      const result = await api.getWorkyardProjects() as { projects: WorkyardProject[]; total: number; active_count: number; inactive_count: number };
       setWyProjects(result.projects);
     } catch (err) {
       setWyError(err instanceof Error ? err.message : 'Failed to fetch Workyard projects');
@@ -127,6 +130,10 @@ export function ProjectList() {
   };
 
   const filteredWy = wyProjects.filter((p) => {
+    // Activity filter
+    if (wyFilter === 'active' && !p.recently_active) return false;
+    if (wyFilter === 'inactive' && p.recently_active) return false;
+    // Search filter
     if (!wySearch) return true;
     const q = wySearch.toLowerCase();
     return p.site_name.toLowerCase().includes(q) ||
@@ -179,22 +186,41 @@ export function ProjectList() {
                 </div>
 
                 {!wyLoading && !wyError && (
-                  <div className="flex items-center gap-3 mt-4">
-                    <div className="relative flex-1">
-                      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        placeholder="Search by name, number, or market..."
-                        value={wySearch}
-                        onChange={(e) => setWySearch(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                      />
+                  <div className="space-y-3 mt-4">
+                    <div className="flex gap-2">
+                      {(['active', 'inactive', 'all'] as const).map((f) => (
+                        <button
+                          key={f}
+                          onClick={() => setWyFilter(f)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                            wyFilter === f
+                              ? f === 'active' ? 'bg-emerald-100 text-emerald-700' : f === 'inactive' ? 'bg-gray-200 text-gray-700' : 'bg-blue-100 text-blue-700'
+                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                          }`}
+                        >
+                          {f === 'active' ? `In Construction (${wyProjects.filter(p => p.recently_active).length})` :
+                           f === 'inactive' ? `Inactive (${wyProjects.filter(p => !p.recently_active).length})` :
+                           `All (${wyProjects.length})`}
+                        </button>
+                      ))}
                     </div>
-                    <button
-                      onClick={selectAll}
-                      className="text-sm text-emerald-600 hover:text-emerald-700 font-medium whitespace-nowrap"
-                    >
-                      Select all ({filteredWy.filter((p) => !p.already_imported).length})
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <div className="relative flex-1">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                          placeholder="Search by name, number, or market..."
+                          value={wySearch}
+                          onChange={(e) => setWySearch(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                        />
+                      </div>
+                      <button
+                        onClick={selectAll}
+                        className="text-sm text-emerald-600 hover:text-emerald-700 font-medium whitespace-nowrap"
+                      >
+                        Select all ({filteredWy.filter((p) => !p.already_imported).length})
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -242,6 +268,9 @@ export function ProjectList() {
                             )}
                             {proj.already_imported && (
                               <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-medium">Already imported</span>
+                            )}
+                            {!proj.recently_active && (
+                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full font-medium">No activity 5d+</span>
                             )}
                           </div>
                           <div className="text-sm text-gray-500 mt-0.5 flex gap-3">
