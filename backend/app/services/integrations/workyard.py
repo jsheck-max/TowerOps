@@ -50,22 +50,48 @@ class WorkyardClient:
         logger.info(f"Workyard org_id: {self._org_id}")
         return self._org_id
 
+    async def _get_paginated(self, path: str, params: dict | None = None) -> list[dict]:
+        """Fetch all pages from a paginated Workyard endpoint."""
+        all_results = []
+        page = 1
+        while True:
+            p = dict(params or {})
+            p["page"] = page
+            data = await self._get(path, p)
+            if isinstance(data, list):
+                if not data:
+                    break
+                all_results.extend(data)
+                if len(data) < 50:
+                    break
+            elif isinstance(data, dict):
+                items = data.get("data", data.get("projects", data.get("results", [])))
+                if not items:
+                    break
+                all_results.extend(items)
+                # Check pagination metadata
+                meta = data.get("meta", {})
+                last_page = meta.get("last_page", meta.get("total_pages", 0))
+                if last_page and page >= last_page:
+                    break
+                if len(items) < 50:
+                    break
+            else:
+                break
+            page += 1
+            if page > 20:  # Safety limit
+                break
+        return all_results
+
     async def get_projects(self) -> list[dict]:
-        """Fetch all projects from Workyard."""
+        """Fetch ALL projects from Workyard with pagination."""
         org_id = await self.get_org_id()
         try:
-            data = await self._get(f"/orgs/{org_id}/projects", None)
-            if isinstance(data, list):
-                return data
-            return data.get("data", data.get("projects", []))
+            return await self._get_paginated(f"/orgs/{org_id}/projects")
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
-                # Try alternative endpoint
                 try:
-                    data = await self._get(f"/orgs/{org_id}/jobs", None)
-                    if isinstance(data, list):
-                        return data
-                    return data.get("data", [])
+                    return await self._get_paginated(f"/orgs/{org_id}/jobs")
                 except Exception:
                     pass
             raise
