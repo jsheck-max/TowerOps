@@ -1,6 +1,5 @@
 import httpx
 import logging
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -8,93 +7,102 @@ WORKYARD_BASE_URL = "https://api.workyard.com"
 
 
 class WorkyardClient:
-    """Client for Workyard REST API."""
+    """Client for Workyard REST API.
+    
+    Workyard API structure:
+    - GET /orgs -> list orgs, get org_id
+    - GET /orgs/{org_id}/projects -> list projects
+    - GET /orgs/{org_id}/employees.v2?status=eq:active -> list employees
+    - GET /orgs/{org_id}/time_cards?clock_in=gte:{start}&clock_in=lte:{end} -> time cards
+    """
 
-    def __init__(self, api_key: str, org_id: str = "20752"):
+    def __init__(self, api_key: str):
         self.api_key = api_key
-        self.org_id = org_id
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+        self._org_id: str | None = None
 
-    async def _get(self, endpoint: str, params: dict | None = None) -> dict:
+    async def _get(self, path: str, params: dict | None = None) -> dict | list:
         """Make GET request to Workyard API."""
         async with httpx.AsyncClient(timeout=30.0) as client:
-            url = f"{WORKYARD_BASE_URL}{endpoint}"
-            logger.info(f"Workyard GET {url} params={params}")
+            url = f"{WORKYARD_BASE_URL}{path}"
+            logger.info(f"Workyard GET {url}")
             response = await client.get(url, headers=self.headers, params=params)
             response.raise_for_status()
             return response.json()
 
+    async def get_org_id(self) -> str:
+        """Get the organization ID from Workyard."""
+        if self._org_id:
+            return self._org_id
+        data = await self._get("/orgs")
+        if isinstance(data, list) and len(data) > 0:
+            self._org_id = str(data[0]["id"])
+        elif isinstance(data, dict):
+            orgs = data.get("data", [])
+            if orgs:
+                self._org_id = str(orgs[0]["id"])
+        if not self._org_id:
+            raise Exception("Could not find Workyard organization")
+        logger.info(f"Workyard org_id: {self._org_id}")
+        return self._org_id
+
     async def get_projects(self) -> list[dict]:
-        """Fetch all projects/jobs from Workyard."""
+        """Fetch all projects from Workyard."""
+        org_id = await self.get_org_id()
         try:
-            # Try /v1/projects first (common pattern)
-            data = await self._get("/v1/projects", {"org_id": self.org_id})
-            projects = data.get("data", data.get("projects", data.get("results", [])))
-            if isinstance(projects, list):
-                return projects
-            return [projects] if projects else []
+            data = await self._get(f"/orgs/{org_id}/projects", {"limit": 500})
+            if isinstance(data, list):
+                return data
+            return data.get("data", data.get("projects", []))
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
-                # Fall back to /v1/jobs
+                # Try alternative endpoint
                 try:
-                    data = await self._get("/v1/jobs", {"org_id": self.org_id})
-                    return data.get("data", data.get("jobs", data.get("results", [])))
+                    data = await self._get(f"/orgs/{org_id}/jobs", {"limit": 500})
+                    if isinstance(data, list):
+                        return data
+                    return data.get("data", [])
                 except Exception:
                     pass
-            logger.error(f"Workyard API error: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Workyard connection error: {e}")
             raise
 
     async def get_employees(self) -> list[dict]:
-        """Fetch all employees/crew members from Workyard."""
-        try:
-            data = await self._get("/v1/employees", {"org_id": self.org_id})
-            return data.get("data", data.get("employees", data.get("results", [])))
-        except Exception as e:
-            logger.error(f"Workyard employees error: {e}")
-            raise
+        """Fetch active employees from Workyard."""
+        org_id = await self.get_org_id()
+        data = await self._get(f"/orgs/{org_id}/employees.v2", {"status": "eq:active", "limit": 200})
+        if isinstance(data, list):
+            return data
+        return data.get("data", [])
 
-    async def get_time_entries(self, start_date: str, end_date: str, project_id: str | None = None) -> list[dict]:
-        """Fetch time entries from Workyard."""
+    async def get_time_cards(self, start_date: str, end_date: str) -> list[dict]:
+        """Fetch time cards from Workyard for a date range."""
+        org_id = await self.get_org_id()
         params = {
-            "org_id": self.org_id,
-            "start_date": start_date,
-            "end_date": end_date,
+            "clock_in": f"gte:{start_date}",
+            "limit": 500,
         }
-        if project_id:
-            params["project_id"] = project_id
-        try:
-            data = await self._get("/v1/time_entries", params)
-            return data.get("data", data.get("time_entries", data.get("results", [])))
-        except Exception as e:
-            logger.error(f"Workyard time entries error: {e}")
-            raise
+        data = await self._get(f"/orgs/{org_id}/time_cards", params)
+        if isinstance(data, list):
+            return data
+        return data.get("data", [])
 
     async def test_connection(self) -> dict:
-        """Test the API connection."""
+        """Test the API connection by fetching org info."""
         try:
-            # Simple request to verify credentials
-            data = await self._get("/v1/projects", {"org_id": self.org_id, "limit": 1})
-            return {"status": "connected", "message": "Workyard API connection successful"}
+            org_id = await self.get_org_id()
+            return {"status": "connected", "message": f"Connected to Workyard (org {org_id})"}
         except httpx.HTTPStatusError as e:
-            return {"status": "error", "message": f"API returned {e.response.status_code}: {e.response.text[:200]}"}
+            return {"status": "error", "message": f"API returned {e.response.status_code}"}
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
 
 def normalize_workyard_project(raw: dict) -> dict:
-    """Normalize a Workyard project/job into TowerOps format.
-    
-    Workyard may return fields under different names depending on the endpoint.
-    This function handles the most common field mappings.
-    """
-    # Try multiple possible field names for each value
+    """Normalize a Workyard project into TowerOps format."""
     def pick(*keys, default=None):
         for k in keys:
             val = raw.get(k)
@@ -102,29 +110,29 @@ def normalize_workyard_project(raw: dict) -> dict:
                 return val
         return default
 
-    # Parse address components
-    address = pick("address", "location", "site_address", "job_address", default="")
-    state = pick("state", "address_state", default="")
-    city = pick("city", "address_city", "market", default="")
+    # Handle address - could be string or nested object
+    address_raw = pick("address", "location", "site_address", default="")
+    state = pick("state", default="")
+    city = pick("city", "market", default="")
 
-    # If address is a dict (some APIs nest it)
-    if isinstance(address, dict):
-        state = address.get("state", state)
-        city = address.get("city", city)
-        address = address.get("full_address", address.get("street", ""))
+    if isinstance(address_raw, dict):
+        state = address_raw.get("state", address_raw.get("region", state))
+        city = address_raw.get("city", city)
+        address_str = address_raw.get("full_address", address_raw.get("street", address_raw.get("line1", "")))
+    else:
+        address_str = str(address_raw) if address_raw else ""
 
     return {
-        "workyard_id": str(pick("id", "project_id", "job_id", default="")),
-        "site_name": pick("name", "project_name", "job_name", "title", default="Unknown"),
-        "site_number": pick("code", "project_code", "job_code", "number", "external_id", default=""),
-        "address": address,
+        "workyard_id": str(pick("id", "project_id", default="")),
+        "site_name": pick("name", "project_name", "title", default="Unknown"),
+        "site_number": pick("code", "number", "external_id", "reference", default=""),
+        "address": address_str,
         "state": state,
         "market": city,
         "status": pick("status", default="active"),
         "customer_name": pick("customer", "customer_name", "client", "client_name", default=""),
-        "created_at": pick("created_at", "created", "date_created", default=""),
-        "cost_codes": pick("cost_codes", "codes", default=[]),
-        "raw": raw,  # Include full raw data so frontend can display anything
+        "created_at": pick("created_at", "created", default=""),
+        "raw": raw,
     }
 
 
@@ -137,14 +145,20 @@ def normalize_workyard_employee(raw: dict) -> dict:
                 return val
         return default
 
+    first = pick("first_name", default="")
+    last = pick("last_name", default="")
+    full = pick("name", "full_name", "display_name", default="")
+    if not full and (first or last):
+        full = f"{first} {last}".strip()
+
     return {
-        "workyard_id": str(pick("id", "employee_id", "user_id", default="")),
-        "name": pick("name", "full_name", "display_name", default=""),
-        "first_name": pick("first_name", default=""),
-        "last_name": pick("last_name", default=""),
+        "workyard_id": str(pick("id", "employee_id", default="")),
+        "name": full,
+        "first_name": first,
+        "last_name": last,
         "role": pick("role", "job_title", "position", default="technician"),
         "email": pick("email", default=""),
-        "phone": pick("phone", "phone_number", default=""),
+        "phone": pick("phone", "mobile_phone", "phone_number", default=""),
         "is_active": pick("is_active", "active", default=True),
         "crew": pick("crew", "crew_name", "team", "group", default=""),
     }
