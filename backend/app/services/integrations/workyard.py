@@ -101,6 +101,18 @@ class WorkyardClient:
             return {"status": "error", "message": str(e)}
 
 
+def _to_str(val) -> str:
+    """Safely convert any value to a string. Handles nested objects."""
+    if val is None:
+        return ""
+    if isinstance(val, dict):
+        # Extract name from nested objects like {"id": 1, "name": "TNTS"}
+        return str(val.get("name", val.get("title", val.get("label", ""))))
+    if isinstance(val, list):
+        return ", ".join(str(v) for v in val)
+    return str(val)
+
+
 def normalize_workyard_project(raw: dict) -> dict:
     """Normalize a Workyard project into TowerOps format."""
     def pick(*keys, default=None):
@@ -112,8 +124,8 @@ def normalize_workyard_project(raw: dict) -> dict:
 
     # Handle address - could be string or nested object
     address_raw = pick("address", "location", "site_address", default="")
-    state = pick("state", default="")
-    city = pick("city", "market", default="")
+    state = _to_str(pick("state", default=""))
+    city = _to_str(pick("city", "market", default=""))
 
     if isinstance(address_raw, dict):
         state = address_raw.get("state", address_raw.get("region", state))
@@ -122,16 +134,20 @@ def normalize_workyard_project(raw: dict) -> dict:
     else:
         address_str = str(address_raw) if address_raw else ""
 
+    # Handle customer - could be object like {"id": 1, "name": "TNTS", "org_id": 20752}
+    customer_raw = pick("customer", "customer_name", "client", "client_name", default="")
+    customer_name = _to_str(customer_raw)
+
     return {
         "workyard_id": str(pick("id", "project_id", default="")),
-        "site_name": pick("name", "project_name", "title", default="Unknown"),
-        "site_number": pick("code", "number", "external_id", "reference", default=""),
-        "address": address_str,
-        "state": state,
-        "market": city,
-        "status": pick("status", default="active"),
-        "customer_name": pick("customer", "customer_name", "client", "client_name", default=""),
-        "created_at": pick("created_at", "created", default=""),
+        "site_name": _to_str(pick("name", "project_name", "title", default="Unknown")),
+        "site_number": _to_str(pick("code", "number", "external_id", "reference", default="")),
+        "address": _to_str(address_str),
+        "state": _to_str(state),
+        "market": _to_str(city),
+        "status": _to_str(pick("status", default="active")),
+        "customer_name": customer_name,
+        "created_at": _to_str(pick("created_at", "created", default="")),
         "raw": raw,
     }
 
