@@ -97,24 +97,15 @@ class WorkyardClient:
             raise
 
     async def get_employees(self) -> list[dict]:
-        """Fetch active employees from Workyard."""
+        """Fetch active employees from Workyard (paginated)."""
         org_id = await self.get_org_id()
-        data = await self._get(f"/orgs/{org_id}/employees.v2", {"status": "eq:active"})
-        if isinstance(data, list):
-            return data
-        return data.get("data", [])
+        return await self._get_paginated(f"/orgs/{org_id}/employees.v2", {"status": "eq:active"})
 
     async def get_time_cards(self, start_date: str, end_date: str) -> list[dict]:
-        """Fetch time cards from Workyard for a date range."""
+        """Fetch time cards from Workyard for a date range (paginated)."""
         org_id = await self.get_org_id()
-        params = {
-            "clock_in": f"gte:{start_date}",
-            "limit": 500,
-        }
-        data = await self._get(f"/orgs/{org_id}/time_cards", params)
-        if isinstance(data, list):
-            return data
-        return data.get("data", [])
+        params = {"clock_in": f"gte:{start_date}"}
+        return await self._get_paginated(f"/orgs/{org_id}/time_cards", params)
 
     async def test_connection(self) -> dict:
         """Test the API connection by fetching org info."""
@@ -193,14 +184,25 @@ def normalize_workyard_employee(raw: dict) -> dict:
     if not full and (first or last):
         full = f"{first} {last}".strip()
 
+    # Pay rate - Workyard stores this on the employee record
+    pay_rate = pick("pay_rate", "hourly_rate", "rate", "wage", default=None)
+    if isinstance(pay_rate, dict):
+        pay_rate = pay_rate.get("amount", pay_rate.get("rate", None))
+    try:
+        pay_rate = float(pay_rate) if pay_rate else None
+    except (ValueError, TypeError):
+        pay_rate = None
+
     return {
         "workyard_id": str(pick("id", "employee_id", default="")),
         "name": full,
         "first_name": first,
         "last_name": last,
-        "role": pick("role", "job_title", "position", default="technician"),
-        "email": pick("email", default=""),
-        "phone": pick("phone", "mobile_phone", "phone_number", default=""),
+        "role": _to_str(pick("role", "job_title", "position", default="technician")),
+        "email": _to_str(pick("email", default="")),
+        "phone": _to_str(pick("phone", "mobile_phone", "phone_number", default="")),
         "is_active": pick("is_active", "active", default=True),
-        "crew": pick("crew", "crew_name", "team", "group", default=""),
+        "crew": _to_str(pick("crew", "crew_name", "team", "group", default="")),
+        "pay_rate": pay_rate,
+        "pay_type": _to_str(pick("pay_type", "compensation_type", default="")),
     }
