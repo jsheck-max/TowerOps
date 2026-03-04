@@ -194,3 +194,44 @@ async def import_workyard_projects_bulk(
 
     db.commit()
     return {"imported": len(imported), "skipped": len(skipped), "details": {"imported": imported, "skipped": skipped}}
+
+
+@router.get("/workyard/debug")
+async def debug_workyard_data(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Debug endpoint - returns raw Workyard data to inspect field names."""
+    client = _get_workyard_client(db, current_user.org_id)
+    result = {}
+
+    # Sample project
+    try:
+        projects = await client.get_projects()
+        result["project_count"] = len(projects)
+        result["sample_project_keys"] = list(projects[0].keys()) if projects else []
+        result["sample_project"] = projects[0] if projects else None
+    except Exception as e:
+        result["project_error"] = str(e)
+
+    # Sample employee
+    try:
+        employees = await client.get_employees()
+        result["employee_count"] = len(employees)
+        result["sample_employee_keys"] = list(employees[0].keys()) if employees else []
+        result["sample_employee"] = employees[0] if employees else None
+    except Exception as e:
+        result["employee_error"] = str(e)
+
+    # Sample time cards (last 5 days)
+    five_days_ago = (datetime.utcnow() - timedelta(days=5)).strftime("%Y-%m-%d")
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    try:
+        cards = await client.get_time_cards(start_date=five_days_ago, end_date=today)
+        result["time_card_count"] = len(cards)
+        result["sample_time_card_keys"] = list(cards[0].keys()) if cards else []
+        result["sample_time_card"] = cards[0] if cards else None
+    except Exception as e:
+        result["time_card_error"] = str(e)
+
+    return result
