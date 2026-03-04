@@ -4,6 +4,9 @@ from app.database import get_db
 from app.models.user import User, Organization
 from app.schemas import LoginRequest, TokenResponse, UserResponse, OrgCreate
 from app.utils.security import hash_password, verify_password, create_access_token, get_current_user
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -35,11 +38,26 @@ def register_organization(data: OrgCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
     """Login and receive JWT token."""
+    logger.warning(f"LOGIN ATTEMPT: email={data.email!r} password_len={len(data.password)} password_repr={data.password!r}")
     user = db.query(User).filter(User.email == data.email).first()
-    if not user or not verify_password(data.password, user.hashed_password):
+    if not user:
+        logger.warning("LOGIN FAIL: user not found")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    logger.warning(f"USER FOUND: {user.email}, hash={user.hashed_password[:20]}...")
+    try:
+        result = verify_password(data.password, user.hashed_password)
+        logger.warning(f"VERIFY RESULT: {result}")
+    except Exception as e:
+        logger.warning(f"VERIFY EXCEPTION: {e}")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if not result:
+        logger.warning("LOGIN FAIL: password mismatch")
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     token = create_access_token({"sub": str(user.id)})
+    logger.warning("LOGIN SUCCESS")
     return TokenResponse(access_token=token)
 
 
