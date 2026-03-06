@@ -3,31 +3,59 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { StatCard, StatusBadge, BudgetBar } from '../components/ui';
 import { api } from '../api/client';
+import { RefreshCw, Loader2 } from 'lucide-react';
 import type { DashboardStats, ProjectSummary, ProjectStatus } from '../types';
+
+interface SyncResult {
+  synced: number;
+  total_cost: number;
+  projects_updated: number;
+  employees_with_rates: number;
+  skipped_no_project: number;
+  days: number;
+}
 
 export function Dashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [s, p] = await Promise.all([
-          api.getDashboardStats() as Promise<DashboardStats>,
-          api.getDashboardProjects() as Promise<ProjectSummary[]>,
-        ]);
-        setStats(s);
-        setProjects(p);
-      } catch {
-        // If unauthorized, redirect handled by api client
-      } finally {
-        setLoading(false);
-      }
-    }
     load();
   }, []);
+
+  async function load() {
+    try {
+      const [s, p] = await Promise.all([
+        api.getDashboardStats() as Promise<DashboardStats>,
+        api.getDashboardProjects() as Promise<ProjectSummary[]>,
+      ]);
+      setStats(s);
+      setProjects(p);
+    } catch {
+      // If unauthorized, redirect handled by api client
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const result = await api.syncWorkyardTime(14) as SyncResult;
+      setSyncResult(result);
+      // Reload dashboard data
+      await load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -45,6 +73,30 @@ export function Dashboard() {
       <Header title="Dashboard" subtitle="Real-time portfolio overview" />
 
       <div className="flex-1 p-8 space-y-8 overflow-auto">
+        {/* Sync Button */}
+        <div className="flex items-center gap-4">
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+          >
+            {syncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+            {syncing ? 'Syncing from Workyard...' : 'Sync Time & Costs'}
+          </button>
+          {syncResult && (
+            <div className="text-sm text-gray-600 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-lg">
+              Synced <span className="font-semibold">{syncResult.synced}</span> time entries
+              {' · '}
+              <span className="font-semibold text-emerald-700">${syncResult.total_cost.toLocaleString()}</span> total labor cost
+              {' · '}
+              <span className="font-semibold">{syncResult.projects_updated}</span> projects updated
+              {syncResult.employees_with_rates > 0 && (
+                <> · {syncResult.employees_with_rates} employees with pay rates</>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Stat Cards */}
         {stats && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
