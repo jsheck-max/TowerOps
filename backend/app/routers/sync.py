@@ -65,21 +65,14 @@ async def fetch_workyard_projects(
             recent_cards = []
 
         # Build set of project IDs with recent activity
+        # Workyard stores project refs in cost_allocations[].org_project_id
         active_project_ids = set()
         for tc in recent_cards:
-            # project_id could be top-level or nested in a project object
-            pid = tc.get("project_id")
-            if not pid and isinstance(tc.get("project"), dict):
-                pid = tc["project"].get("id")
-            # Also check cost_allocation or job fields
-            if not pid:
-                pid = tc.get("job_id")
-            if not pid and isinstance(tc.get("cost_allocation"), list):
-                for alloc in tc["cost_allocation"]:
-                    if isinstance(alloc, dict) and alloc.get("project_id"):
-                        active_project_ids.add(str(alloc["project_id"]))
-            if pid:
-                active_project_ids.add(str(pid))
+            for alloc in tc.get("cost_allocations", []):
+                if isinstance(alloc, dict):
+                    pid = alloc.get("org_project_id")
+                    if pid:
+                        active_project_ids.add(str(pid))
         logger.warning(f"Active project IDs from time cards: {len(active_project_ids)}")
 
         normalized = [normalize_workyard_project(p) for p in raw_projects]
