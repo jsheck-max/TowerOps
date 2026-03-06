@@ -89,7 +89,7 @@ class WorkyardClient:
             else:
                 break
             page += 1
-            if page > 20:
+            if page > 100:
                 break
         logger.warning(f"Workyard paginated {path}: {len(all_results)} total results")
         return all_results
