@@ -150,6 +150,10 @@ class ApiClient {
     return this.request('/sync/workyard/import', { method: 'POST', body: JSON.stringify(data) });
   }
 
+  syncWorkyardTime(days: number = 7) {
+    return this.request('/sync/workyard/sync-time?days=' + days, { method: 'POST' });
+  }
+
   importWorkyardProjectsBulk(projectIds: string[]) {
     return this.request('/sync/workyard/import-bulk', { method: 'POST', body: JSON.stringify(projectIds) });
   }
