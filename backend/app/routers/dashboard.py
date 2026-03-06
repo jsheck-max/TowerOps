@@ -19,7 +19,7 @@ def get_dashboard_stats(
     """Get high-level dashboard statistics."""
     projects = db.query(Project).filter(Project.org_id == current_user.org_id).all()
 
-    active_statuses = {"pre_construction", "active", "punch_list"}
+    active_statuses = {"pre_construction", "active", "in_progress", "punch_list"}
     active = [p for p in projects if p.status in active_statuses]
     total_budget = sum(p.total_budget or 0 for p in projects)
     total_actual = sum(p.total_actual or 0 for p in projects)
@@ -43,7 +43,7 @@ def get_dashboard_projects(
     """Get project summaries for the dashboard cards."""
     projects = db.query(Project).filter(
         Project.org_id == current_user.org_id,
-        Project.status.in_(["pre_construction", "active", "punch_list"]),
+        Project.status.in_(["pre_construction", "active", "in_progress", "punch_list"]),
     ).order_by(Project.updated_at.desc()).all()
 
     summaries = []
