@@ -28,6 +28,7 @@ export interface Project {
 export type ProjectStatus =
   | 'pre_construction'
   | 'active'
+  | 'in_progress'
   | 'punch_list'
   | 'closeout'
   | 'complete'
@@ -78,6 +79,7 @@ export const CARRIERS = ['AT&T', 'Verizon', 'T-Mobile', 'L3Harris', 'DISH', 'Oth
 export const STATUS_LABELS: Record<ProjectStatus, string> = {
   pre_construction: 'Pre-Construction',
   active: 'Active',
+  in_progress: 'In Progress',
   punch_list: 'Punch List',
   closeout: 'Closeout',
   complete: 'Complete',
