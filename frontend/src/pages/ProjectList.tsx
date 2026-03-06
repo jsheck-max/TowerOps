@@ -422,7 +422,7 @@ export function ProjectList() {
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Carrier</th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Market</th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Budget vs Actual</th>
+                  <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">Labor Spend</th>
                 </tr>
               </thead>
               <tbody>
@@ -439,7 +439,7 @@ export function ProjectList() {
                     <td className="px-6 py-4 text-sm text-gray-600">{p.carrier}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{p.market || '—'}</td>
                     <td className="px-6 py-4"><StatusBadge status={p.status as ProjectStatus} /></td>
-                    <td className="px-6 py-4 w-56">
+                    <td className="px-6 py-4 w-48">
                       <BudgetBar budget={p.total_budget || 0} actual={p.total_actual || 0} />
                     </td>
                   </tr>
