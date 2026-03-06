@@ -5,23 +5,13 @@ hdrs = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/json"}
 
 async def main():
     async with httpx.AsyncClient(timeout=30) as c:
-        found = 0
-        for page in range(1, 6):
-            r = await c.get(f"https://api.workyard.com/orgs/20752/time_cards?page={page}", headers=hdrs)
-            data = r.json()
-            items = data.get("data", data) if isinstance(data, dict) else data
-            print(f"Page {page}: {len(items)} time cards")
-            for tc in items:
-                allocs = tc.get("cost_allocations", [])
-                for alloc in allocs:
-                    pid = alloc.get("org_project_id")
-                    if pid:
-                        proj = alloc.get("org_project", {})
-                        pname = proj.get("name", "?") if isinstance(proj, dict) else "?"
-                        print(f"  HIT: org_project_id={pid} name={pname}")
-                        found += 1
-                        if found >= 5:
-                            return
-        print(f"Total found with org_project_id: {found}")
+        r = await c.get("https://api.workyard.com/orgs/20752/projects?page=1", headers=hdrs)
+        data = r.json()
+        items = data.get("data", data) if isinstance(data, dict) else data
+        if items:
+            print("ALL KEYS:", list(items[0].keys()))
+            print()
+            print("FIRST PROJECT:")
+            print(json.dumps(items[0], indent=2, default=str)[:3000])
 
 asyncio.run(main())
