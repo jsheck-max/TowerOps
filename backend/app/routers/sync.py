@@ -364,21 +364,75 @@ async def sync_workyard_time(
         total_cost += labor_cost
         synced += 1
     
-    # Update project total_actual with calculated costs
+    # Track per-project: unique crew members and latest activity
+    # project_crew[pid] = set of employee burden rates that worked on it
+    # project_latest[pid] = most recent time card start timestamp
+    project_crew = {}   # pid -> set of burden rates
+    project_latest = {} # pid -> latest unix timestamp
+    
+    # Re-scan time cards for crew and recency info
+    five_days_ago_unix = (datetime.utcnow() - timedelta(days=5)).timestamp()
+    
+    for tc in time_cards:
+        emp_id = str(tc.get("employee_id", ""))
+        emp_info = emp_lookup.get(emp_id, {"name": "Unknown", "pay_rate": 0.0})
+        start_unix = tc.get("start_dt_unix", 0) or 0
+        
+        for alloc in tc.get("cost_allocations", []):
+            if isinstance(alloc, dict):
+                wpid = str(alloc.get("org_project_id", ""))
+                if wpid and wpid in project_lookup:
+                    pid = str(project_lookup[wpid].id)
+                    # Track crew rates
+                    if pid not in project_crew:
+                        project_crew[pid] = set()
+                    if emp_info["pay_rate"] > 0:
+                        project_crew[pid].add(emp_info["pay_rate"])
+                    # Track latest activity
+                    if start_unix > project_latest.get(pid, 0):
+                        project_latest[pid] = start_unix
+    
+    # Update projects with costs, budgets, and status
+    import uuid as uuid_mod
+    MARKUP = 1.25 * 1.10  # 25% overhead + 10% G&A = 1.375
+    BUDGET_REG_HRS = 90
+    BUDGET_OT_HRS = 20
+    TRAVEL_FLAT = 2000.0
+    
     updated_projects = 0
     for pid_str, cost in project_costs.items():
-        import uuid as uuid_mod
         proj = db.query(Project).filter(Project.id == uuid_mod.UUID(pid_str)).first()
-        if proj:
-            proj.total_actual = cost
-            # Update status based on activity
-            if cost > 0:
-                proj.status = "in_progress"
-            updated_projects += 1
+        if not proj:
+            continue
+        
+        # Set actual spend
+        proj.total_actual = round(cost, 2)
+        
+        # Auto-calculate default budget if not manually set
+        # Formula: for each crew member, (burden × 90 + burden × 1.5 × 20) × 1.375 + $2000 travel
+        crew_rates = project_crew.get(pid_str, set())
+        if crew_rates and (proj.total_budget or 0) == 0:
+            budget = 0.0
+            for rate in crew_rates:
+                budget += (rate * BUDGET_REG_HRS + rate * 1.5 * BUDGET_OT_HRS) * MARKUP
+            budget += TRAVEL_FLAT
+            proj.total_budget = round(budget, 2)
+        
+        # Set status based on RECENT activity (last 5 days)
+        latest = project_latest.get(pid_str, 0)
+        if latest >= five_days_ago_unix:
+            proj.status = "in_progress"
+        elif cost > 0:
+            # Has historical spend but no recent activity
+            proj.status = "active"
+        
+        updated_projects += 1
     
     db.commit()
     
-    logger.warning(f"Sync complete: {synced} entries, {skipped_no_project} no project match, {skipped_no_hours} no hours, ${total_cost:.2f} total cost, {updated_projects} projects updated")
+    active_count = sum(1 for pid in project_latest if project_latest[pid] >= five_days_ago_unix)
+    
+    logger.warning(f"Sync complete: {synced} entries, {skipped_no_project} no project, {skipped_no_hours} no hours, ${total_cost:.2f} cost, {updated_projects} projects, {active_count} recently active")
     
     return {
         "synced": synced,
@@ -386,6 +440,7 @@ async def sync_workyard_time(
         "skipped_no_hours": skipped_no_hours,
         "total_cost": round(total_cost, 2),
         "projects_updated": updated_projects,
+        "recently_active": active_count,
         "employees_with_rates": sum(1 for e in emp_lookup.values() if e["pay_rate"] > 0),
         "days": days,
     }
