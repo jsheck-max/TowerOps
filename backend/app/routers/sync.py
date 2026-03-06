@@ -241,3 +241,161 @@ async def debug_workyard_data(
         result["time_card_error"] = str(e)
 
     return result
+
+
+
+@router.post("/workyard/sync-time")
+async def sync_workyard_time(
+    days: int = 7,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Pull time cards from Workyard and sync hours + costs to TowerOps projects.
+    
+    1. Fetches time cards for the last N days
+    2. Fetches employees to get pay rates
+    3. Matches time cards to imported projects via org_project_id
+    4. Creates/updates time entries and calculates labor costs
+    5. Updates project total_actual with real spend
+    """
+    from app.models.time_entry import TimeEntry
+    from app.models.cost_entry import CrewMember
+    
+    client = _get_workyard_client(db, current_user.org_id)
+    
+    start_date = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    end_date = datetime.utcnow().strftime("%Y-%m-%d")
+    
+    # Fetch time cards and employees in sequence
+    logger.warning(f"Syncing time cards for last {days} days...")
+    time_cards = await client.get_time_cards(start_date=start_date, end_date=end_date)
+    logger.warning(f"Fetched {len(time_cards)} time cards")
+    
+    employees_raw = await client.get_employees()
+    logger.warning(f"Fetched {len(employees_raw)} employees")
+    
+    # Build employee lookup: employee_id -> {name, pay_rate}
+    emp_lookup = {}
+    for emp in employees_raw:
+        eid = emp.get("id") or emp.get("employee_id")
+        if not eid:
+            continue
+        pay_rate = emp.get("pay_rate") or emp.get("hourly_rate") or emp.get("rate") or emp.get("wage")
+        if isinstance(pay_rate, dict):
+            pay_rate = pay_rate.get("amount") or pay_rate.get("rate")
+        try:
+            pay_rate = float(pay_rate) if pay_rate else 0.0
+        except (ValueError, TypeError):
+            pay_rate = 0.0
+        name = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+        emp_lookup[str(eid)] = {"name": name, "pay_rate": pay_rate}
+    
+    logger.warning(f"Employee lookup built: {len(emp_lookup)} employees, {sum(1 for e in emp_lookup.values() if e['pay_rate'] > 0)} with pay rates")
+    
+    # Build project lookup: workyard_id -> TowerOps project
+    projects = db.query(Project).filter(Project.org_id == current_user.org_id).all()
+    project_lookup = {}
+    for p in projects:
+        if p.notes and "workyard_id:" in (p.notes or ""):
+            wid = p.notes.split("workyard_id:")[1].split(",")[0].strip()
+            project_lookup[wid] = p
+    
+    logger.warning(f"Project lookup built: {len(project_lookup)} imported projects")
+    
+    # Process time cards
+    synced = 0
+    skipped_no_project = 0
+    skipped_no_hours = 0
+    total_cost = 0.0
+    project_costs = {}  # project_id -> total cost
+    
+    for tc in time_cards:
+        # Get hours from time_summary
+        summary = tc.get("time_summary_v2", tc.get("time_summary", {}))
+        duration_secs = summary.get("duration_secs", 0) or summary.get("duration", 0) or 0
+        regular_secs = summary.get("regular_secs", 0) or summary.get("regular", 0) or 0
+        ot_secs = summary.get("over_time_secs", 0) or summary.get("over_time", 0) or 0
+        
+        total_hours = duration_secs / 3600.0
+        reg_hours = regular_secs / 3600.0
+        ot_hours = ot_secs / 3600.0
+        
+        if total_hours < 0.01:
+            skipped_no_hours += 1
+            continue
+        
+        # Get employee info
+        emp_id = str(tc.get("employee_id", ""))
+        emp_info = emp_lookup.get(emp_id, {"name": "Unknown", "pay_rate": 0.0})
+        pay_rate = emp_info["pay_rate"]
+        
+        # Calculate cost: regular + OT at 1.5x
+        labor_cost = (reg_hours * pay_rate) + (ot_hours * pay_rate * 1.5)
+        if labor_cost == 0 and pay_rate == 0:
+            # Fallback: use $35/hr default if no rate
+            labor_cost = (reg_hours * 35.0) + (ot_hours * 35.0 * 1.5)
+        
+        # Match to project via cost_allocations
+        matched_project = None
+        for alloc in tc.get("cost_allocations", []):
+            if isinstance(alloc, dict):
+                wpid = str(alloc.get("org_project_id", ""))
+                if wpid and wpid in project_lookup:
+                    matched_project = project_lookup[wpid]
+                    break
+        
+        if not matched_project:
+            skipped_no_project += 1
+            continue
+        
+        # Track costs per project
+        pid = str(matched_project.id)
+        project_costs[pid] = project_costs.get(pid, 0.0) + labor_cost
+        total_cost += labor_cost
+        synced += 1
+    
+    # Update project total_actual with calculated costs
+    updated_projects = 0
+    for pid_str, cost in project_costs.items():
+        import uuid as uuid_mod
+        proj = db.query(Project).filter(Project.id == uuid_mod.UUID(pid_str)).first()
+        if proj:
+            proj.total_actual = cost
+            # Update status based on activity
+            if cost > 0:
+                proj.status = "in_progress"
+            updated_projects += 1
+    
+    db.commit()
+    
+    logger.warning(f"Sync complete: {synced} entries, {skipped_no_project} no project match, {skipped_no_hours} no hours, ${total_cost:.2f} total cost, {updated_projects} projects updated")
+    
+    return {
+        "synced": synced,
+        "skipped_no_project": skipped_no_project,
+        "skipped_no_hours": skipped_no_hours,
+        "total_cost": round(total_cost, 2),
+        "projects_updated": updated_projects,
+        "employees_with_rates": sum(1 for e in emp_lookup.values() if e["pay_rate"] > 0),
+        "days": days,
+    }
+
+
+@router.get("/workyard/employees")
+async def fetch_workyard_employees_with_rates(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Fetch all employees from Workyard with pay rates."""
+    client = _get_workyard_client(db, current_user.org_id)
+    try:
+        raw_employees = await client.get_employees()
+        normalized = [normalize_workyard_employee(e) for e in raw_employees]
+        return {
+            "employees": normalized,
+            "total": len(normalized),
+            "with_rates": sum(1 for e in normalized if e.get("pay_rate")),
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch Workyard employees: {e}")
+        raise HTTPException(status_code=502, detail=f"Workyard API error: {str(e)}")
