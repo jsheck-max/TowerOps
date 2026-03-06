@@ -329,11 +329,21 @@ async def sync_workyard_time(
         emp_info = emp_lookup.get(emp_id, {"name": "Unknown", "pay_rate": 0.0})
         pay_rate = emp_info["pay_rate"]
         
-        # Calculate cost: regular + OT at 1.5x
-        labor_cost = (reg_hours * pay_rate) + (ot_hours * pay_rate * 1.5)
-        if labor_cost == 0 and pay_rate == 0:
-            # Fallback: use $35/hr default if no rate
-            labor_cost = (reg_hours * 35.0) + (ot_hours * 35.0 * 1.5)
+        # TNTS Cost Formula (from site budget sheets):
+        # Cost = (burden × reg_hrs + burden × 1.5 × OT_hrs) × 1.25 × 1.10 + per_diem
+        # 25% = overhead/insurance/workers comp
+        # 10% = general & administrative
+        # Combined markup = × 1.375
+        MARKUP_OVERHEAD = 1.25   # 25% overhead
+        MARKUP_GA = 1.10         # 10% G&A
+        
+        raw_labor = (reg_hours * pay_rate) + (ot_hours * pay_rate * 1.5)
+        if raw_labor == 0 and pay_rate == 0:
+            # Fallback: use $35/hr default burden rate if no rate found
+            raw_labor = (reg_hours * 35.0) + (ot_hours * 35.0 * 1.5)
+        
+        # Apply 25%/10% markup (per diem added separately, NOT marked up)
+        labor_cost = raw_labor * MARKUP_OVERHEAD * MARKUP_GA
         
         # Match to project via cost_allocations
         matched_project = None
